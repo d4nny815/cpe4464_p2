@@ -4,21 +4,22 @@
 #include <signal.h>
 #include <string.h>
 
-// #define DEBUG
+#define DEBUG
+#define L2_IMPL
 
 static int noprompt = 0;
 
 void sigint_handler(int sig)
 {
    if (SIGINT == sig)
-	   fish_main_exit();
+       fish_main_exit();
 }
 
 static int print_route(void *callback_data __attribute__((unused)),
-      fnaddr_t dest, int prefix_len __attribute((unused)),
-      fnaddr_t net_hop __attribute((unused)),
-      int metric __attribute((unused)),
-      void *entry_data __attribute__((unused))) {
+        fnaddr_t dest, int prefix_len __attribute((unused)),
+        fnaddr_t net_hop __attribute((unused)),
+        int metric __attribute((unused)),
+        void *entry_data __attribute__((unused))) {
    printf("%s\n", fn_ntoa(dest));
    return 0;
 }
@@ -64,17 +65,37 @@ static void keyboard_callback(char *line)
    fflush(stdout);
 }
 
-// // Prototypes for program 2.  Taken directly from fish.h header file
-// #ifdef L2_IMPL
+// Prototypes for program 2.  Taken directly from fish.h header file
+#ifdef L2_IMPL
+
 // int my_fish_l2_send(void *l3frame, fnaddr_t next_hop, int len, uint8_t l2_proto)
 // {
 //    return 0;
 // }
 
-// int my_fishnode_l2_receive(void *l2frame)
-// {
-//    return 0;
-// }
+static int (*orig_l2_receive)(void *) = NULL;
+
+int my_fishnode_l2_receive(void *l2frame) {
+   printf("l2 frame received\n");
+   return orig_l2_receive(l2frame);   
+   // recieve l2 frame
+
+   // if invalid checksum, drop frame
+
+   // if not l2 destination, drop frame
+
+   // remove l2 header
+
+   // pass l3 frame to l3 receive function
+   void *l3frame = l2frame; // TODO: remove l2 header and set l3frame to point to the l3 frame
+   int len = 0; // TODO: set length of l3 frame
+   uint8_t protocol = 0; // TODO: set protocol of l3 frame
+   fish_l3.fishnode_l3_receive(l3frame, len, protocol);
+
+
+   fish_debugframe(FISH_DEBUG_USER1, "my_fishnode_l2_receive", l2frame, 2, 0, 0, 0);
+   return 0;
+}
 
 // void my_arp_received(void *l2frame)
 // {
@@ -91,64 +112,67 @@ static void keyboard_callback(char *line)
 // void my_resolve_fnaddr(fnaddr_t addr, arp_resolution_cb cb, void *param)
 // {
 // }
-// #endif
 
-// #ifdef L3_IMPL
-// int my_fishnode_l3_receive(void *l3frame, int len)
-// {
-//    return 0;
-// }
+#endif
+/* 
 
-// int my_fish_l3_send(void *l4frame, int len, fnaddr_t dst_addr,
-//                uint8_t proto, uint8_t ttl)
-// {
-//    return 0;
-// }
+   #ifdef L3_IMPL
+   int my_fishnode_l3_receive(void *l3frame, int len)
+   {
+      return 0;
+   }
 
-// int my_fish_l3_forward(void *l3frame, int len)
-// {
-//    return 0;
-// }
+   int my_fish_l3_send(void *l4frame, int len, fnaddr_t dst_addr,
+                  uint8_t proto, uint8_t ttl)
+   {
+      return 0;
+   }
 
-// // Callback to broadcast DV advertisement
-// void my_timed_event(void*)
-// {
-// }
+   int my_fish_l3_forward(void *l3frame, int len)
+   {
+      return 0;
+   }
 
-// // Full functionality
-// void* my_add_fwtable_entry(fnaddr_t dst, int prefix_length, fnaddr_t next_hop,
-//                    int metric, char type, void *user_data)
-// {
-//    return NULL;
-// }
+   // Callback to broadcast DV advertisement
+   void my_timed_event(void*)
+   {
+   }
 
-// void* my_remove_fwtable_entry(void *route_key)
-// {
-//    return NULL;
-// }
+   // Full functionality
+   void* my_add_fwtable_entry(fnaddr_t dst, int prefix_length, fnaddr_t next_hop,
+                     int metric, char type, void *user_data)
+   {
+      return NULL;
+   }
 
-// int my_update_fwtable_metric(void *route_key, int new_metric)
-// {
-//    return 0;
-// }
+   void* my_remove_fwtable_entry(void *route_key)
+   {
+      return NULL;
+   }
 
-// fnaddr_t my_longest_prefix_match(fnaddr_t addr)
-// {
-//    return 0;
-// }
-// #endif
+   int my_update_fwtable_metric(void *route_key, int new_metric)
+   {
+      return 0;
+   }
+
+   fnaddr_t my_longest_prefix_match(fnaddr_t addr)
+   {
+      return 0;
+   }
+   #endif 
+*/
 
 int main(int argc, char **argv)
 {
-	struct sigaction sa;
+    struct sigaction sa;
    int arg_offset = 1;
 
    /* Verify and parse the command line parameters */
-	if (argc != 2 && argc != 3 && argc != 4)
-	{
-		printf("Usage: %s [-noprompt] <fishhead address> [<fn address>]\n", argv[0]);
-		return 1;
-	}
+    if (argc != 2 && argc != 3 && argc != 4)
+    {
+        printf("Usage: %s [-noprompt] <fishhead address> [<fn address>]\n", argv[0]);
+        return 1;
+    }
 
    if (0 == strcasecmp(argv[arg_offset], "-noprompt")) {
       noprompt = 1;
@@ -156,29 +180,29 @@ int main(int argc, char **argv)
    }
 
    /* Install the signal handler */
-	sa.sa_handler = sigint_handler;
-	sigfillset(&sa.sa_mask);
-	sa.sa_flags = 0;
-	if (-1 == sigaction(SIGINT, &sa, NULL))
-	{
-		perror("Couldn't set signal handler for SIGINT");
-		return 2;
-	}
+    sa.sa_handler = sigint_handler;
+    sigfillset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    if (-1 == sigaction(SIGINT, &sa, NULL))
+    {
+        perror("Couldn't set signal handler for SIGINT");
+        return 2;
+    }
 
    /* Set up debugging output */
 #ifdef DEBUG
-	fish_setdebuglevel(FISH_DEBUG_INTERNAL);
-	// fish_setdebuglevel(FISH_DEBUG_ALL);
+    // fish_setdebuglevel(FISH_DEBUG_INTERNAL);
+    fish_setdebuglevel(FISH_DEBUG_ALL);
 #else
-	fish_setdebuglevel(FISH_DEBUG_NONE);
+    fish_setdebuglevel(FISH_DEBUG_NONE);
 #endif
-	fish_setdebugfile(stdout);
+    fish_setdebugfile(stdout);
 
    /* Join the fishnet */
-	if (argc-arg_offset == 1)
-		fish_joinnetwork(argv[arg_offset]);
-	else
-		fish_joinnetwork_addr(argv[arg_offset], fn_aton(argv[arg_offset+1]));
+    if (argc-arg_offset == 1)
+        fish_joinnetwork(argv[arg_offset]);
+    else
+        fish_joinnetwork_addr(argv[arg_offset], fn_aton(argv[arg_offset+1]));
 
    /* Install the command line parsing callback */
    fish_keybhook(keyboard_callback);
@@ -188,13 +212,14 @@ int main(int argc, char **argv)
 
 #ifdef L2_IMPL
    // Examples of overriding function pointers for program 2 base functionality
+   orig_l2_receive = fish_l2.fishnode_l2_receive;
    fish_l2.fishnode_l2_receive = &my_fishnode_l2_receive;
-   fish_l2.fish_l2_send = &my_fish_l2_send;
-   fish_arp.arp_received = &my_arp_received;
-   fish_arp.send_arp_request = &my_send_arp_request;
-   // Full functionality functions
-   fish_arp.add_arp_entry = &my_add_arp_entry;
-   fish_arp.resolve_fnaddr = &my_resolve_fnaddr;
+   // fish_l2.fish_l2_send = &my_fish_l2_send;
+   // fish_arp.arp_received = &my_arp_received;
+   // fish_arp.send_arp_request = &my_send_arp_request;
+   // // Full functionality functions
+   // fish_arp.add_arp_entry = &my_add_arp_entry;
+   // fish_arp.resolve_fnaddr = &my_resolve_fnaddr;
 #endif
 
 #ifdef L3_IMPL
@@ -210,7 +235,7 @@ int main(int argc, char **argv)
    fish_fwd.longest_prefix_match = &my_longest_prefix_match;
 #endif
 
-#if 0
+#if 1
    /* Enable the built-in neighbor protocol implementation.  This will discover
     * one-hop routes in your fishnet.  The link-state routing protocol requires
     * the neighbor protocol to be working, whereas it is redundant with DV.
@@ -240,18 +265,18 @@ int main(int argc, char **argv)
 #endif
 
    /* Execute the libfish event loop */
-	fish_main();
+    fish_main();
 
    /* Clean up and exit */
    if (!noprompt)
       printf("\n");
    fish_keybhook(NULL);
 
-	printf("Fishnode exiting cleanly.\n");
+    printf("Fishnode exiting cleanly.\n");
 
    fishnet_cleanup();
 
    // Cleanup your data structures here
 
-	return 0;
+    return 0;
 }

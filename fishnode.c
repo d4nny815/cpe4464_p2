@@ -143,14 +143,72 @@ void send_arp_response(l2_header_t* l2_header, l3_arp_header_t* req_arp_header) 
     return;
 }
 
-// int my_fish_l2_send(void *l3frame, fnaddr_t next_hop, int len, uint8_t l2_proto)
-// {
-//    return 0;
-// }
+void send_l2_frame(fn_l2addr_t dst_l2_addr, uint8_t* l2_frame) {
+    // add l2 addr
+    l2_header_t* l2_header = (l2_header_t*)l2_frame;
+    l2_header->dst_l2_addr = dst_l2_addr;
+
+    // calc checksum
+    uint16_t checksum = in_cksum(l2_frame, l2_header->length);
+    l2_header->checksum = checksum;
+
+    // l1 send
+    if (fish_l1_send((void*)l2_frame) != 0) {
+        printf("[L2 SEND] Failed to send ARP Response\n");
+        return;
+    }   
+
+    // free frame
+    free((void*)l2_frame);
+
+    // return
+    return;
+}
+void my_resolve_arp_cb(fn_l2addr_t l2_addr, void* l2_frame) {
+    // check validity of l2 addr
+    if (!FNL2_VALID(l2_addr)) {
+        free(l2_frame);
+        return;
+    }
+
+    // send frame
+    send_l2_frame(l2_addr, l2_frame);
+
+    return;
+}
+
+
+int my_fish_l2_send(void *l3frame, fnaddr_t next_hop, int len, uint8_t l2_proto) {
+    // construct l2 frame without dst l2 address since dont know yet
+    // make l2 header
+    l2_header_t l2_header;
+    l2_header.dst_l2_addr = (fn_l2addr_t){0};
+    l2_header.src_l2_addr = fish_getl2address();
+    l2_header.checksum = 0;
+    l2_header.length = htons(sizeof(l2_header_t) + len);
+    l2_header.protocol = l2_proto;
+
+    // wrap l3 frame in l2 frame
+    uint8_t* l2_frame = malloc(sizeof(l2_header_t) + len);
+    if (!l2_frame) {
+        printf("[L2_SEND] Failed to allocate memory for L2 frame\n");
+        return 1;
+    }
+
+    memcpy(l2_frame, &l2_header, sizeof(l2_header_t));
+    memcpy(l2_frame + sizeof(l2_header_t), l3frame, len);
+
+    if (next_hop == ALL_NEIGHBORS) {
+        send_l2_frame(ALL_L2_NEIGHBORS, l2_frame);
+    } else {
+        fish_arp.resolve_fnaddr(next_hop, my_resolve_arp_cb, (void*)l2_frame);
+        return 1;
+    }
+
+    return 0;
+}
 
 int my_fishnode_l2_receive(void *l2frame) {
-    // TODO: where does resolve_fn_addr come in?
-    
     // recieve l2 frame
     l2_header_t header;
     parse_l2_header(l2frame, &header);
@@ -197,7 +255,6 @@ int my_fishnode_l2_receive(void *l2frame) {
             return 1;    
     }
 
-    printf("\n[L2_RECEIVE] DONE WITH L2 RECV\n");
     return 0;
 }
 
@@ -344,7 +401,7 @@ int main(int argc, char **argv)
 #ifdef L2_IMPL
    // Examples of overriding function pointers for program 2 base functionality
    fish_l2.fishnode_l2_receive = &my_fishnode_l2_receive;
-   // fish_l2.fish_l2_send = &my_fish_l2_send;
+   fish_l2.fish_l2_send = &my_fish_l2_send;
    fish_arp.arp_received = &my_arp_received;
    // fish_arp.send_arp_request = &my_send_arp_request;
    // // Full functionality functions

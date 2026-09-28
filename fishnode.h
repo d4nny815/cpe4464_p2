@@ -13,26 +13,22 @@ typedef struct __attribute__((packed)) l2_header_t {
 } l2_header_t;
 
 typedef enum : uint8_t {
-    L3 = 1,
-    ARP = 2,
-    NEIGHBOR = 3,
-    DVR = 4,
+    L2_PROTO_L3 = 1,
+    L2_PROTO_ARP = 2,
+    L2_PROTO_NEIGHBOR = 3,
+    L2_PROTO_DVR = 4,
 } l2_protocol_t;
 
-int my_fishnode_l2_receive(void *l2frame);
-void my_arp_received(void *l2frame);
-
-typedef struct __attribute__((packed)) l3_arp_header_t {
+typedef struct __attribute__((packed)) l3_arp_frame_t {
     uint32_t type;
     fnaddr_t queried_l3_addr;
     fn_l2addr_t l2_for_query_l3;
-} l3_arp_header_t;
+} l3_arp_frame_t;
 
 typedef enum : uint32_t {
-    REQ = 1,
-    RSP = 2,
+    L3_ARP_REQ = 1,
+    L3_ARP_RSP = 2,
 } l3_arp_type_t;
-
 
 
 #endif /* FISHNODE_H */

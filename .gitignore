@@ -1,4 +1,5 @@
-*-Darwin-arm
+*-Darwin-arm*
 cpe4464_fishnet_r1*
 fishnet_spec_r8.pdf
-libfish-Darwin-arm.a
+.DS_Store
+*.txt

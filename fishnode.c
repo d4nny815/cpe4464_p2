@@ -5,7 +5,7 @@
 #include <string.h>
 #include <stdbool.h>
 
-#define DEBUG
+// #define DEBUG
 #define L2_IMPL
 
 static int noprompt = 0;
@@ -69,77 +69,54 @@ static void keyboard_callback(char *line)
 // Prototypes for program 2.  Taken directly from fish.h header file
 #ifdef L2_IMPL
 
-void print_l2_header(l2_header_t *header) {
-    printf("\n===============l2 frame ===============\n");
-    printf("dst_l2_addr: %s\n", fnl2_ntoa(header->dst_l2_addr));
-    printf("src_l2_addr: %s\n", fnl2_ntoa(header->src_l2_addr));
-
-    printf("checksum: %04x\n", header->checksum);
-    printf("length: %u\n", header->length);
-    printf("protocol: %02x\n", header->protocol);
-    
-    return;
-}
-
-void print_l3_arp_header(l3_arp_header_t *header) {
-    printf("\n===============l3 frame ===============\n");
-    printf("type: %x\n", header->type);
-    printf("query l3: %s\n", fn_ntoa(header->queried_l3_addr));
-    printf("l2_for_query_l3: %s\n", fnl2_ntoa(header->l2_for_query_l3));
-
-    return;
-}
-
 void parse_l2_header(void *l2frame, l2_header_t *header) {
     memcpy(header, l2frame, sizeof(l2_header_t));
 
-    // header->checksum = ntohs(header->checksum); // ? why do i not need to convert the checksum?
+    header->checksum = ntohs(header->checksum);
     header->length = ntohs(header->length);
     
     return;
 }
 
-void parse_l3_arp_header(void* l3frame, l3_arp_header_t* header) {
-    *header = *((l3_arp_header_t*)l3frame);
+void parse_l3_arp_header(void* l3frame, l3_arp_frame_t* header) {
+    memcpy(header, l3frame, sizeof(l3_arp_frame_t));
 
     header->type = ntohl(header->type);
     
     return;
 }
 
-void send_arp_response(l2_header_t* l2_header, l3_arp_header_t* req_arp_header) {
-    #define RSP_L2_LENGTH (sizeof(l2_header_t) + sizeof(l3_arp_header_t))
+void send_arp_response(l2_header_t* l2_header, l3_arp_frame_t* req_arp_header) {
+    #define RSP_L2_LENGTH (sizeof(l2_header_t) + sizeof(l3_arp_frame_t))
 
     // construct l3 arp response header
-    l3_arp_header_t rsp_arp_header;
-    rsp_arp_header.type = htonl(RSP);
+    l3_arp_frame_t rsp_arp_header;
+    rsp_arp_header.type = htonl(L3_ARP_RSP);
     rsp_arp_header.queried_l3_addr = req_arp_header->queried_l3_addr;
     rsp_arp_header.l2_for_query_l3 = fish_getl2address();
 
-    // construct l2 rsp frame
+    // construct l2 rsp header
     l2_header_t rsp_l2_header;
     rsp_l2_header.dst_l2_addr = l2_header->src_l2_addr;
     rsp_l2_header.src_l2_addr = fish_getl2address();
     rsp_l2_header.checksum = 0; 
     rsp_l2_header.length = htons(RSP_L2_LENGTH);
-    rsp_l2_header.protocol = ARP;
+    rsp_l2_header.protocol = L2_PROTO_ARP;
     
+    // construct l2 frame
     uint8_t l2_frame[RSP_L2_LENGTH];
-    
     memcpy(l2_frame, &rsp_l2_header, sizeof(l2_header_t));
-    memcpy(l2_frame + sizeof(l2_header_t), &rsp_arp_header, sizeof(l3_arp_header_t));
+    memcpy(l2_frame + sizeof(l2_header_t), &rsp_arp_header, sizeof(l3_arp_frame_t));
     
     uint16_t checksum = in_cksum(l2_frame, RSP_L2_LENGTH);
     l2_header_t* p_l2_frame = (l2_header_t*)l2_frame;
     p_l2_frame->checksum = checksum;
-    
+
     if (fish_l1_send((void*)l2_frame) != 0) {
         printf("[SEND_ARP_RESP] Failed to send ARP Response\n");
         return;
     }   
 
-    printf("[SEND_ARP_RESP] ARP Response sent successfully\n");
-    
     return;
 }
 
@@ -149,7 +126,7 @@ void send_l2_frame(fn_l2addr_t dst_l2_addr, uint8_t* l2_frame) {
     l2_header->dst_l2_addr = dst_l2_addr;
 
     // calc checksum
-    uint16_t checksum = in_cksum(l2_frame, l2_header->length);
+    uint16_t checksum = in_cksum(l2_frame, ntohs(l2_header->length));
     l2_header->checksum = checksum;
 
     // l1 send
@@ -164,6 +141,7 @@ void send_l2_frame(fn_l2addr_t dst_l2_addr, uint8_t* l2_frame) {
     // return
     return;
 }
+
 void my_resolve_arp_cb(fn_l2addr_t l2_addr, void* l2_frame) {
     // check validity of l2 addr
     if (!FNL2_VALID(l2_addr)) {
@@ -177,7 +155,6 @@ void my_resolve_arp_cb(fn_l2addr_t l2_addr, void* l2_frame) {
     return;
 }
 
-
 int my_fish_l2_send(void *l3frame, fnaddr_t next_hop, int len, uint8_t l2_proto) {
     // construct l2 frame without dst l2 address since dont know yet
     // make l2 header
@@ -189,7 +166,7 @@ int my_fish_l2_send(void *l3frame, fnaddr_t next_hop, int len, uint8_t l2_proto)
     l2_header.protocol = l2_proto;
 
     // wrap l3 frame in l2 frame
-    uint8_t* l2_frame = malloc(sizeof(l2_header_t) + len);
+    uint8_t* l2_frame = (uint8_t*)malloc(sizeof(l2_header_t) + len);
     if (!l2_frame) {
         printf("[L2_SEND] Failed to allocate memory for L2 frame\n");
         return 1;
@@ -199,8 +176,10 @@ int my_fish_l2_send(void *l3frame, fnaddr_t next_hop, int len, uint8_t l2_proto)
     memcpy(l2_frame + sizeof(l2_header_t), l3frame, len);
 
     if (next_hop == ALL_NEIGHBORS) {
+        printf("[L2 SEND] broadcast\n");
         send_l2_frame(ALL_L2_NEIGHBORS, l2_frame);
     } else {
+        printf("[L2 SEND] next hop\n");
         fish_arp.resolve_fnaddr(next_hop, my_resolve_arp_cb, (void*)l2_frame);
         return 1;
     }
@@ -244,11 +223,11 @@ int my_fishnode_l2_receive(void *l2frame) {
     
     // pass l3 frame to l3 receive function
     switch (header.protocol) {
-        case L3: 
+        case L2_PROTO_L3: 
             fish_l3.fish_l3_receive(l3frame, len, header.protocol);
             break;
-        case ARP:
-            my_arp_received(l2frame);
+        case L2_PROTO_ARP:
+            fish_arp.arp_received(l2frame);
             break;
         default:
             printf("[L2_RECEIVE] Unknown protocol\n");
@@ -258,17 +237,17 @@ int my_fishnode_l2_receive(void *l2frame) {
     return 0;
 }
 
-void my_arp_received(void *l2frame) {    
+void my_arp_received(void *l2frame) {
     l2_header_t l2_header;
     parse_l2_header(l2frame, &l2_header);
     
     // parse ARP header
     void *l3_frame = (void *)((uint8_t *)(l2frame) + sizeof(l2_header_t));
-    l3_arp_header_t arp_header;
+    l3_arp_frame_t arp_header;
     parse_l3_arp_header(l3_frame, &arp_header);
 
     switch (arp_header.type) {
-        case REQ:
+        case L3_ARP_REQ:
             bool im_queried_l3 = arp_header.queried_l3_addr == fish_getaddress();
             if (!im_queried_l3) {
                 printf("[ARP_RECV] Not queried L3 addr\n");
@@ -278,20 +257,29 @@ void my_arp_received(void *l2frame) {
             send_arp_response(&l2_header, &arp_header);
             
             break;
-        case RSP:
+        case L3_ARP_RSP:
             fish_arp.add_arp_entry(arp_header.l2_for_query_l3, arp_header.queried_l3_addr, 180); // TODO: add timeout constant
 
             break;
         default:
-            printf("[ARP_RECV] Invalid ARP Type\n");    
+            printf("[ARP_RECV] Invalid ARP Type\n");
     }
 
     return;
 }
 
-// void my_send_arp_request(fnaddr_t l3addr)
-// {
-// }
+void my_send_arp_request(fnaddr_t l3addr) {
+    // create l3 arp req frame
+    l3_arp_frame_t req_arp_header;
+    req_arp_header.type = htonl(L3_ARP_REQ);
+    req_arp_header.queried_l3_addr = l3addr;
+    req_arp_header.l2_for_query_l3 = fish_getl2address();
+
+    // call l2 send
+    fish_l2.fish_l2_send(&req_arp_header, ALL_NEIGHBORS, sizeof(l3_arp_frame_t), L2_PROTO_ARP);
+
+    return;
+}
 
 // void my_add_arp_entry(fn_l2addr_t l2addr, fnaddr_t addr, int timeout)
 // {
@@ -403,8 +391,8 @@ int main(int argc, char **argv)
    fish_l2.fishnode_l2_receive = &my_fishnode_l2_receive;
    fish_l2.fish_l2_send = &my_fish_l2_send;
    fish_arp.arp_received = &my_arp_received;
-   // fish_arp.send_arp_request = &my_send_arp_request;
-   // // Full functionality functions
+   fish_arp.send_arp_request = &my_send_arp_request;
+   // Full functionality functions
    // fish_arp.add_arp_entry = &my_add_arp_entry;
    // fish_arp.resolve_fnaddr = &my_resolve_fnaddr;
 #endif

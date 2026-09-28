@@ -176,10 +176,8 @@ int my_fish_l2_send(void *l3frame, fnaddr_t next_hop, int len, uint8_t l2_proto)
     memcpy(l2_frame + sizeof(l2_header_t), l3frame, len);
 
     if (next_hop == ALL_NEIGHBORS) {
-        printf("[L2 SEND] broadcast\n");
         send_l2_frame(ALL_L2_NEIGHBORS, l2_frame);
     } else {
-        printf("[L2 SEND] next hop\n");
         fish_arp.resolve_fnaddr(next_hop, my_resolve_arp_cb, (void*)l2_frame);
         return 1;
     }
@@ -250,7 +248,7 @@ void my_arp_received(void *l2frame) {
         case L3_ARP_REQ:
             bool im_queried_l3 = arp_header.queried_l3_addr == fish_getaddress();
             if (!im_queried_l3) {
-                printf("[ARP_RECV] Not queried L3 addr\n");
+                // printf("[ARP_RECV] Not queried L3 addr\n");
                 return;
             }
 

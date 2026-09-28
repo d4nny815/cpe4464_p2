@@ -12,7 +12,7 @@ typedef struct __attribute__((packed)) l2_header_t {
     uint8_t protocol;
 } l2_header_t;
 
-typedef enum : uint8_t {
+typedef enum { 
     L2_PROTO_L3 = 1,
     L2_PROTO_ARP = 2,
     L2_PROTO_NEIGHBOR = 3,
@@ -25,7 +25,7 @@ typedef struct __attribute__((packed)) l3_arp_frame_t {
     fn_l2addr_t l2_for_query_l3;
 } l3_arp_frame_t;
 
-typedef enum : uint32_t {
+typedef enum {
     L3_ARP_REQ = 1,
     L3_ARP_RSP = 2,
 } l3_arp_type_t;

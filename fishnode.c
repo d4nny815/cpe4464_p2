@@ -113,7 +113,7 @@ void send_arp_response(l2_header_t* l2_header, l3_arp_frame_t* req_arp_header) {
     p_l2_frame->checksum = checksum;
 
     if (fish_l1_send((void*)l2_frame) != 0) {
-        printf("[SEND_ARP_RESP] Failed to send ARP Response\n");
+        // printf("[SEND_ARP_RESP] Failed to send ARP Response\n");
         return;
     }   
 
@@ -131,7 +131,7 @@ void send_l2_frame(fn_l2addr_t dst_l2_addr, uint8_t* l2_frame) {
 
     // l1 send
     if (fish_l1_send((void*)l2_frame) != 0) {
-        printf("[L2 SEND] Failed to send ARP Response\n");
+        // printf("[L2 SEND] Failed to send ARP Response\n");
         return;
     }   
 
@@ -192,13 +192,13 @@ int my_fishnode_l2_receive(void *l2frame) {
 
     // if size doesnt add up, drop frame
     if (header.length > MTU || header.length < sizeof(l2_header_t)) {
-        printf("[L2_RECEIVE] invalid length\n");
+        // printf("[L2_RECEIVE] invalid length\n");
         return 1;
     }
 
     // if invalid checksum, drop frame
     if (in_cksum(l2frame, header.length) != 0) {
-        printf("[L2_RECEIVE] invalid checksum\n");
+        // printf("[L2_RECEIVE] invalid checksum\n");
         return 1;
     }
 
@@ -211,7 +211,7 @@ int my_fishnode_l2_receive(void *l2frame) {
         // if (!valid_l2) printf("[L2_RECEIVE] Not valid\n");
         // if (!broadcast_addr) printf("[L2_RECEIVE] Not broadcast\n");
         // if (!my_unicast_addr) printf("[L2_RECEIVE] Not meant for me\n");
-        printf("[L2_RECEIVE] Not valid address or not broadcast or not meant for me\n");
+        // printf("[L2_RECEIVE] Not valid address or not broadcast or not meant for me\n");
         return 1;
     }
 
@@ -228,7 +228,7 @@ int my_fishnode_l2_receive(void *l2frame) {
             fish_arp.arp_received(l2frame);
             break;
         default:
-            printf("[L2_RECEIVE] Unknown protocol\n");
+            // printf("[L2_RECEIVE] Unknown protocol\n");
             return 1;    
     }
 
@@ -387,9 +387,9 @@ int main(int argc, char **argv)
 #ifdef L2_IMPL
    // Examples of overriding function pointers for program 2 base functionality
    fish_l2.fishnode_l2_receive = &my_fishnode_l2_receive;
-   fish_l2.fish_l2_send = &my_fish_l2_send;
-   fish_arp.arp_received = &my_arp_received;
-   fish_arp.send_arp_request = &my_send_arp_request;
+//    fish_l2.fish_l2_send = &my_fish_l2_send;
+//    fish_arp.arp_received = &my_arp_received;
+//    fish_arp.send_arp_request = &my_send_arp_request;
    // Full functionality functions
    // fish_arp.add_arp_entry = &my_add_arp_entry;
    // fish_arp.resolve_fnaddr = &my_resolve_fnaddr;
